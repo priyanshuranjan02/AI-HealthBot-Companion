@@ -1,0 +1,1 @@
+CREATE POLICY "Users can delete their own symptom checks" ON public.symptom_checks FOR DELETE TO authenticated USING (auth.uid() = user_id);
