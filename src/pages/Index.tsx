@@ -7,6 +7,7 @@ import ChatInterface from "@/components/ChatInterface";
 import EmergencyModal from "@/components/EmergencyModal";
 import LanguageToggle from "@/components/LanguageToggle";
 import ThemeToggle from "@/components/ThemeToggle";
+import SiteFooter from "@/components/SiteFooter";
 import { translations, type Language } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -92,9 +93,7 @@ const Index = () => {
       <HeroSection t={t} onStartCheck={() => setView("chat")} onEmergency={() => setShowEmergency(true)} />
       <CategoryCards t={t} onSelect={() => setView("chat")} />
 
-      <footer className="border-t border-border bg-card py-8 text-center text-sm text-muted-foreground">
-        <p>© 2026 AI HealthBot — Emergent AI. For educational purposes only.</p>
-      </footer>
+      <SiteFooter />
 
       {showEmergency && <EmergencyModal t={t} onClose={() => setShowEmergency(false)} />}
     </div>
