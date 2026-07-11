@@ -32,20 +32,20 @@ const SiteFooter = () => (
       <div>
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Connect</h4>
         <div className="flex gap-2">
-          <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub" className="flex h-9 w-9 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
+          <a href="https://github.com/priyanshuranjan02" target="_blank" rel="noreferrer" aria-label="GitHub" className="flex h-9 w-9 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
             <Github className="h-4 w-4" />
           </a>
-          <a href="https://linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn" className="flex h-9 w-9 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
+          <a href="https://www.linkedin.com/in/priyanshu-ranjan-74170a227/" target="_blank" rel="noreferrer" aria-label="LinkedIn" className="flex h-9 w-9 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
             <Linkedin className="h-4 w-4" />
           </a>
-          <a href="mailto:team@aihealthbot.dev" aria-label="Email" className="flex h-9 w-9 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
+          <a href="mailto:ranjanpriyanshu441@gmail.com" aria-label="Email" className="flex h-9 w-9 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
             <Mail className="h-4 w-4" />
           </a>
         </div>
       </div>
     </div>
     <div className="border-t border-border py-4 text-center text-xs text-muted-foreground">
-      © 2026 AI HealthBot · Built with <Heart className="inline h-3 w-3 text-critical" /> for accessible healthcare · For educational purposes only.
+      © 2026 AI HealthBot · Built with <Heart className="inline h-3 w-3 text-critical" /> by Team for accessible healthcare.
     </div>
   </footer>
 );
