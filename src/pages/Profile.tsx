@@ -91,8 +91,12 @@ const Profile = () => {
     if (!user) return;
     setSaving(true);
     const { error } = await supabase.from("profiles").update({
-      full_name: fullName, phone, organization_name: orgName, region,
-      contact_info: contactInfo, role, updated_at: new Date().toISOString(),
+      full_name: fullName,
+      phone,
+      organization_name: orgName,
+      region,
+      contact_info: contactInfo,
+      updated_at: new Date().toISOString(),
     }).eq("id", user.id);
     setSaving(false);
     if (error) toast.error("Failed to save profile");
@@ -402,18 +406,16 @@ const Profile = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 pt-2">
-              <label className="text-sm font-medium text-muted-foreground">Account Type</label>
-              <div className="flex gap-2">
-                {["user", "ngo"].map((r) => (
-                  <button key={r} onClick={() => setRole(r)}
-                    className={`rounded-full border px-4 py-1.5 text-xs font-medium capitalize transition-colors ${
-                      role === r ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"
-                    }`}>
-                    {r === "ngo" ? "NGO" : "User"}
-                  </button>
-                ))}
-              </div>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Account Type
+              </label>
+              <span className="rounded-full border border-border bg-muted/40 px-4 py-1.5 text-xs font-medium capitalize text-foreground">
+                {role || "user"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Contact an administrator to change your account type.
+              </span>
             </div>
 
             <button onClick={handleSave} disabled={saving}
