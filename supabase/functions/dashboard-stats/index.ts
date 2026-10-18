@@ -1,12 +1,6 @@
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -45,6 +39,7 @@ Deno.serve(async (req) => {
     const accessToken = tokenMatch[1].trim();
 
     const authClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -52,9 +47,10 @@ Deno.serve(async (req) => {
     });
 
     const { data: authData, error: authError } =
-      await authClient.auth.getUser(accessToken);
+      await authClient.auth.getClaims(accessToken);
 
-    if (authError || !authData.user) {
+    const userId = authData?.claims?.sub;
+    if (authError || typeof userId !== "string" || !userId) {
       return jsonResponse({ error: "Invalid or expired session" }, 401);
     }
 
@@ -69,7 +65,7 @@ Deno.serve(async (req) => {
     const { data: profile, error: profileError } = await adminClient
       .from("profiles")
       .select("role")
-      .eq("id", authData.user.id)
+      .eq("id", userId)
       .maybeSingle();
 
     if (profileError) {
@@ -106,7 +102,7 @@ Deno.serve(async (req) => {
 
     const severityCounts = { low: 0, moderate: 0, high: 0 };
     allChecks.forEach((c) => {
-      if (c.severity in severityCounts) {
+      if (c.severity === "low" || c.severity === "moderate" || c.severity === "high") {
         severityCounts[c.severity as keyof typeof severityCounts]++;
       }
     });
@@ -166,7 +162,7 @@ Deno.serve(async (req) => {
         severityTrend[day] = { date: day, low: 0, moderate: 0, high: 0 };
       }
 
-      if (c.severity in severityTrend[day]) {
+      if (c.severity === "low" || c.severity === "moderate" || c.severity === "high") {
         severityTrend[day][
           c.severity as "low" | "moderate" | "high"
         ]++;
