@@ -3,6 +3,7 @@ import { Send, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import MessageBubble from "./MessageBubble";
 import { supabase } from "@/integrations/supabase/client";
+import { parseDiagnosis, type ParsedDiagnosis } from "@/lib/parseDiagnosis";
 
 interface Message {
   id: number;
@@ -20,32 +21,6 @@ interface ChatInterfaceProps {
 const quickSymptoms = ["fever", "headache", "cough"];
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-symptoms`;
 
-function parseDiagnosis(text: string, userInput: string, language: string) {
-  const get = (label: string) =>
-    new RegExp(`\\*\\*${label}:\\*\\*\\s*([^\\n*]+)`, "i").exec(text)?.[1]?.trim();
-  const disease = get("Possible Condition") || "Assessment";
-  const severityRaw = (get("Severity") || "low").toLowerCase();
-  const severity = (["low", "moderate", "high"].includes(severityRaw) ? severityRaw : "low") as
-    | "low"
-    | "moderate"
-    | "high";
-  const confidence = parseInt(get("Confidence")?.replace("%", "") || "70", 10);
-
-  const recBlock = /\*\*Recommendations:\*\*([\s\S]*?)(\n\*\*|$)/i.exec(text)?.[1] || "";
-  const recommendations = recBlock
-    .split("\n")
-    .map((l) => l.replace(/^[-*]\s*/, "").trim())
-    .filter(Boolean);
-
-  return {
-    disease,
-    severity,
-    confidence: isNaN(confidence) ? 70 : confidence,
-    recommendations,
-    symptoms: [userInput],
-    language,
-  };
-}
 
 const ChatInterface = ({ t, language, onBack, onEmergency }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>([
@@ -60,23 +35,37 @@ const ChatInterface = ({ t, language, onBack, onEmergency }: ChatInterfaceProps)
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const saveToDb = async (userInput: string, aiText: string) => {
+
+  const saveToDb = async (assessment: ParsedDiagnosis): Promise<boolean> => {
     try {
-      const parsed = parseDiagnosis(aiText, userInput, language);
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("symptom_checks").insert({
-        user_id: user?.id ?? null,
-        symptoms: parsed.symptoms,
-        diagnosis: parsed.disease,
-        confidence: parsed.confidence,
-        severity: parsed.severity,
-        recommendations: parsed.recommendations,
-        language: parsed.language,
-      });
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) throw authError;
+
+      const { error: insertError } = await supabase
+        .from("symptom_checks")
+        .insert({
+          user_id: user?.id ?? null,
+          symptoms: assessment.symptoms,
+          diagnosis: assessment.disease,
+          confidence: assessment.confidence,
+          severity: assessment.severity,
+          recommendations: assessment.recommendations,
+          language: assessment.language,
+        });
+
+      if (insertError) throw insertError;
+
+      return true;
     } catch (err) {
       console.error("Failed to save symptom check:", err);
+      return false;
     }
   };
+
 
   const handleSend = async (text?: string) => {
     const msg = text || input.trim();
@@ -153,10 +142,54 @@ const ChatInterface = ({ t, language, onBack, onEmergency }: ChatInterfaceProps)
       }
 
       setStep(3);
-      if (acc) await saveToDb(msg, acc);
-    } catch (err: any) {
+
+      if (acc.trim()) {
+        const assessment = parseDiagnosis(acc, msg, language);
+
+        const assessmentMarkers = [
+          "**Possible Condition:**",
+          "**Severity:**",
+          "**Confidence:**",
+        ];
+
+        const looksLikeAssessment = assessmentMarkers.some((marker) =>
+          acc.includes(marker)
+        );
+
+        if (looksLikeAssessment && !assessment) {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === aiId
+                ? {
+                    ...message,
+                    text:
+                      "I couldn't validate this assessment. Please try again. " +
+                      "If your symptoms are severe or you may be experiencing an " +
+                      "emergency, seek urgent medical care rather than waiting " +
+                      "for another AI response.",
+                  }
+                : message
+            )
+          );
+        } else if (assessment) {
+          const saved = await saveToDb(assessment);
+
+          if (!saved) {
+            toast.error(
+              "Assessment completed, but it could not be saved to your history."
+            );
+          }
+        }
+      }
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || "Failed to analyze symptoms.");
+
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to analyze symptoms.";
+
+      toast.error(errorMessage);
       setMessages((prev) => prev.filter((m) => m.id !== aiId));
       setStep(1);
     } finally {
