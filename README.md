@@ -2,7 +2,7 @@
 
 > **An AI-Powered Multilingual Healthcare Assistant for Symptom Assessment and Risk Triage**
 
-AI HealthBot is a full-stack healthcare web application that leverages **Machine Learning**, **Google Gemini 2.5 Flash**, and modern web technologies to provide preliminary symptom assessment, conversational health guidance, and severity-based risk triage for rural communities and NGOs.
+AI HealthBot is a full-stack healthcare web application that leverages **Machine Learning**, **Google Gemini 2.5 PRO**, and modern web technologies to provide preliminary symptom assessment, conversational health guidance, and severity-based risk triage for rural communities and NGOs.
 
 > ⚠️ **Disclaimer:** AI HealthBot is a healthcare awareness and decision-support tool. It is **not a substitute for professional medical diagnosis or treatment**.
 
@@ -13,7 +13,7 @@ AI HealthBot is a full-stack healthcare web application that leverages **Machine
 - 🤖 AI-powered conversational healthcare assistant
 - 🩺 Symptom assessment with contextual follow-up questions
 - 📊 Severity-based risk triage (Low, Moderate, High)
-- 🧠 Gemini 2.5 Flash integration for intelligent responses
+- 🧠 Gemini 2.5 Pro integration for intelligent responses
 - 🌍 Multilingual support
 - 🔐 Secure authentication using Supabase Auth + JWT
 - 👤 User profile and health history
@@ -37,7 +37,7 @@ React + Vite Frontend
    ▼
 Node.js + TypeScript Backend
    │
-   ├─────────────► Gemini 2.5 Flash
+   ├─────────────► Gemini 2.5 Pro
    │
    ├─────────────► ML Symptom Analysis
    │
@@ -70,7 +70,7 @@ Prediction + Risk Analysis + Recommendation
 
 ## AI & Machine Learning
 
-- Google Gemini 2.5 Flash
+- Google Gemini 2.5 Pro
 - Symptom Classification
 - Risk Triage Engine
 

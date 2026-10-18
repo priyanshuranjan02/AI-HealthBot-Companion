@@ -47,14 +47,14 @@ const Contact = () => {
           <p className="text-sm text-muted-foreground">
             Questions, feedback, or partnership ideas? We'd love to hear from you.
           </p>
-          <a href="mailto:team@aihealthbot.dev" className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm hover:bg-muted/50">
-            <Mail className="h-4 w-4 text-primary" /> team@aihealthbot.dev
+          <a href="mailto:ranjanpriyanshu441@gmail.com" className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm hover:bg-muted/50">
+            <Mail className="h-4 w-4 text-primary" /> ranjanpriyanshu441@gmail.com
           </a>
-          <a href="https://github.com" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm hover:bg-muted/50">
-            <Github className="h-4 w-4 text-primary" /> github.com/ai-healthbot
+          <a href="https://github.com/priyanshuranjan02" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm hover:bg-muted/50">
+            <Github className="h-4 w-4 text-primary" /> github.com/priyanshuranjan02
           </a>
-          <a href="https://linkedin.com" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm hover:bg-muted/50">
-            <Linkedin className="h-4 w-4 text-primary" /> AI HealthBot on LinkedIn
+          <a href="https://www.linkedin.com/in/priyanshu-ranjan-74170a227/" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm hover:bg-muted/50">
+            <Linkedin className="h-4 w-4 text-primary" /> Author on LinkedIn
           </a>
         </aside>
 
