@@ -36,3 +36,7 @@ supabase/functions/.env
 *.njsproj
 *.sln
 *.sw?
+
+# Local Supabase CLI state
+supabase/.branches/
+supabase/.temp/
