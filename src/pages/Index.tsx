@@ -1,22 +1,25 @@
 import { useState, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart3, LogIn, LogOut, User } from "lucide-react";
 import HeroSection from "@/components/HeroSection";
 import CategoryCards from "@/components/CategoryCards";
-import ChatInterface from "@/components/ChatInterface";
 import EmergencyModal from "@/components/EmergencyModal";
 import LanguageToggle from "@/components/LanguageToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import SiteFooter from "@/components/SiteFooter";
 import { translations, type Language } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { toast } from "sonner";
+
+const ChatInterface = lazy(() => import("@/components/ChatInterface"));
 
 const Index = () => {
   const [language, setLanguage] = useState<Language>("en");
   const [view, setView] = useState<"home" | "chat">("home");
   const [showEmergency, setShowEmergency] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const navigate = useNavigate();
 
   const t = translations[language];
@@ -39,7 +42,9 @@ const Index = () => {
   if (view === "chat") {
     return (
       <>
-        <ChatInterface t={t} language={language} onBack={() => setView("home")} onEmergency={() => setShowEmergency(true)} />
+        <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">Loading health assistant…</div>}>
+          <ChatInterface t={t} language={language} onBack={() => setView("home")} onEmergency={() => setShowEmergency(true)} />
+        </Suspense>
         {showEmergency && <EmergencyModal t={t} onClose={() => setShowEmergency(false)} />}
       </>
     );
@@ -53,12 +58,13 @@ const Index = () => {
         </span>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate("/ngo/dashboard")}
             className="flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <BarChart3 className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Dashboard</span>
+            <span className="hidden sm:inline">NGO Dashboard</span>
           </button>
+          <button onClick={() => navigate(user ? "/ngo/application" : "/ngo/login")} className="text-xs font-medium text-muted-foreground hover:text-foreground">NGO portal</button>
           {user ? (
             <>
               <button

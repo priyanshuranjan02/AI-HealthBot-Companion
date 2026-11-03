@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ShieldCheck, FileText, AlertTriangle, Cookie } from "lucide-react";
+import { ArrowLeft, ShieldCheck, FileText, AlertTriangle, Cookie, type LucideIcon } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Privacy = () => {
@@ -29,9 +29,13 @@ const Privacy = () => {
           </ul>
           <p className="mt-3">
             Data is stored on Lovable Cloud (Supabase) with row-level security so each user can
-            only access their own records. Aggregated (non-identifying) data may power the NGO
-            analytics dashboard. You can delete your account and history at any time from your
-            profile settings.
+            only access their own records. The NGO analytics dashboard is limited to
+            administrator-approved NGO accounts. It currently returns no statistics because
+            caller-submitted assessments and overlapping totals cannot support a trustworthy
+            minimum-cohort guarantee. Analytics will remain suppressed until a trusted,
+            appropriately scoped dataset and reporting rules are approved. Account deletion
+            removes account-linked assessments and retains audit events with account identifiers
+            and submitted details removed.
           </p>
         </Card>
 
@@ -64,7 +68,7 @@ const Card = ({
   title,
   children,
 }: {
-  icon: any;
+  icon: LucideIcon;
   title: string;
   children: React.ReactNode;
 }) => (

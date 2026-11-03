@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { deleteAccountWorkflow, isInvalidSessionAuthError } from "./workflow.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,44 +10,61 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
-    const authHeader = req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authorization" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? null;
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const anon = createClient(supabaseUrl, anonKey);
-    const { data: userData, error: userErr } = await anon.auth.getUser(authHeader);
-    if (userErr || !userData.user) {
-      return new Response(JSON.stringify({ error: "Invalid session" }), {
-        status: 401,
+    if (!supabaseUrl || !anonKey || !serviceKey) {
+      return new Response(JSON.stringify({ error: "Server configuration error" }), {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const admin = createClient(supabaseUrl, serviceKey);
-    const userId = userData.user.id;
+    const auth = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
-    await admin.from("symptom_checks").delete().eq("user_id", userId);
-    await admin.from("profiles").delete().eq("id", userId);
-    const { error: delErr } = await admin.auth.admin.deleteUser(userId);
-    if (delErr) throw delErr;
+    const result = await deleteAccountWorkflow(token, {
+      getUser: async (accessToken) => {
+        const { data, error } = await auth.auth.getUser(accessToken);
+        if (error) {
+          // Only known invalid-session codes are unauthorized. Other Auth
+          // errors, including network/service failures, remain unavailable.
+          return isInvalidSessionAuthError(error) ? { kind: "invalid" } : { kind: "unavailable" };
+        }
+        return data.user
+          ? { kind: "authenticated", userId: data.user.id }
+          : { kind: "invalid" };
+      },
+      deleteAuthUser: async (userId) => {
+        const { error } = await admin.auth.admin.deleteUser(userId);
+        return { error: Boolean(error) };
+      },
+    });
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify(result.body), {
+      status: result.status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
-    console.error("delete-account error:", err);
+  } catch {
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
+      JSON.stringify({
+        error: "Deletion could not be confirmed. It may have completed. Retry only if you can still sign in; otherwise contact support.",
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
