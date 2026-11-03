@@ -1,5 +1,6 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { dashboardStatsWorkflow } from "./workflow.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,12 +38,7 @@ Deno.serve(async (req) => {
     // Authenticate the caller using their supplied access token.
     const authHeader = req.headers.get("Authorization");
     const tokenMatch = authHeader?.match(/^Bearer\s+(.+)$/i);
-
-    if (!tokenMatch) {
-      return jsonResponse({ error: "Authentication required" }, 401);
-    }
-
-    const accessToken = tokenMatch[1].trim();
+    const accessToken = tokenMatch?.[1].trim() ?? null;
 
     const authClient = createClient(supabaseUrl, anonKey, {
       auth: {
@@ -51,14 +47,6 @@ Deno.serve(async (req) => {
       },
     });
 
-    const { data: authData, error: authError } =
-      await authClient.auth.getUser(accessToken);
-
-    if (authError || !authData.user) {
-      return jsonResponse({ error: "Invalid or expired session" }, 401);
-    }
-
-    // Use the trusted database role, never a role supplied by the client.
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         persistSession: false,
@@ -66,164 +54,45 @@ Deno.serve(async (req) => {
       },
     });
 
-    const { data: profile, error: profileError } = await adminClient
-      .from("profiles")
-      .select("role")
-      .eq("id", authData.user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error("dashboard-stats: Role lookup failed", profileError.message);
-      return jsonResponse({ error: "Unable to verify account permissions" }, 500);
-    }
-
-    if (profile?.role !== "ngo") {
-      return jsonResponse({ error: "Forbidden: NGO access required" }, 403);
-    }
-
-    // Privileged analytics queries run only after successful authorization.
-    const { data: checks, error } = await adminClient
-      .from("symptom_checks")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("dashboard-stats: Assessment query failed", error.message);
-      return jsonResponse({ error: "Unable to load dashboard statistics" }, 500);
-    }
-
-    const { count: userCount, error: countError } = await adminClient
-      .from("profiles")
-      .select("*", { count: "exact", head: true });
-
-    if (countError) {
-      console.error("dashboard-stats: User count failed", countError.message);
-      return jsonResponse({ error: "Unable to load dashboard statistics" }, 500);
-    }
-
-    const allChecks = checks || [];
-    const totalChecks = allChecks.length;
-
-    const severityCounts = { low: 0, moderate: 0, high: 0 };
-    allChecks.forEach((c) => {
-      if (c.severity in severityCounts) {
-        severityCounts[c.severity as keyof typeof severityCounts]++;
-      }
+    const result = await dashboardStatsWorkflow(accessToken, {
+      getUserId: async (token) => {
+        const { data, error } = await authClient.auth.getUser(token);
+        if (error) {
+          if (error.status === 401) return null;
+          throw error;
+        }
+        return data.user?.id ?? null;
+      },
+      getProfileRole: async (userId) => {
+        const { data, error } = await adminClient
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .maybeSingle();
+        if (error) throw error;
+        return data?.role ?? null;
+      },
+      getLatestApplicationStatus: async (userId) => {
+        const { data, error } = await adminClient
+          .from("ngo_applications")
+          .select("status")
+          .eq("applicant_user_id", userId)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        return data?.status ?? null;
+      },
+      getStats: async () => {
+        // The RPC is intentionally fail-closed and returns no health statistics.
+        const { data, error } = await adminClient.rpc("get_ngo_dashboard_stats");
+        if (error) throw error;
+        return data;
+      },
     });
 
-    const diagnosisCounts: Record<string, number> = {};
-    allChecks.forEach((c) => {
-      const diagnosis = c.diagnosis || "Unknown";
-      diagnosisCounts[diagnosis] = (diagnosisCounts[diagnosis] || 0) + 1;
-    });
-
-    const topDiagnoses = Object.entries(diagnosisCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([name, count]) => ({ name, count }));
-
-    // Daily counts (last 30 days).
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const recentChecks = allChecks.filter(
-      (c) => c.created_at && new Date(c.created_at) >= thirtyDaysAgo,
-    );
-
-    const dailyCounts: Record<string, number> = {};
-    recentChecks.forEach((c) => {
-      const day = c.created_at.split("T")[0];
-      dailyCounts[day] = (dailyCounts[day] || 0) + 1;
-    });
-
-    const dailyChecks = Object.entries(dailyCounts)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, count]) => ({ date, count }));
-
-    // Monthly assessments (last 12 months with data).
-    const monthlyCounts: Record<string, number> = {};
-    allChecks.forEach((c) => {
-      if (!c.created_at) return;
-      const month = c.created_at.slice(0, 7);
-      monthlyCounts[month] = (monthlyCounts[month] || 0) + 1;
-    });
-
-    const monthlyAssessments = Object.entries(monthlyCounts)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-12)
-      .map(([month, count]) => ({ month, count }));
-
-    // Severity trend (last 30 days).
-    const severityTrend: Record<
-      string,
-      { date: string; low: number; moderate: number; high: number }
-    > = {};
-
-    recentChecks.forEach((c) => {
-      const day = c.created_at.split("T")[0];
-
-      if (!severityTrend[day]) {
-        severityTrend[day] = { date: day, low: 0, moderate: 0, high: 0 };
-      }
-
-      if (c.severity in severityTrend[day]) {
-        severityTrend[day][
-          c.severity as "low" | "moderate" | "high"
-        ]++;
-      }
-    });
-
-    const predictionTrend = Object.values(severityTrend)
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    // Language breakdown.
-    const langCounts: Record<string, number> = {};
-    allChecks.forEach((c) => {
-      const language = c.language || "unknown";
-      langCounts[language] = (langCounts[language] || 0) + 1;
-    });
-
-    const languageBreakdown = Object.entries(langCounts).map(
-      ([name, count]) => ({ name: name.toUpperCase(), count }),
-    );
-
-    // Most frequently reported symptoms.
-    const symptomCounts: Record<string, number> = {};
-    allChecks.forEach((c) => {
-      (Array.isArray(c.symptoms) ? c.symptoms : []).forEach((s: string) => {
-        symptomCounts[s] = (symptomCounts[s] || 0) + 1;
-      });
-    });
-
-    const topSymptoms = Object.entries(symptomCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([name, count]) => ({ name, count }));
-
-    const avgConfidence =
-      totalChecks > 0
-        ? Math.round(
-            allChecks.reduce((sum, c) => sum + (Number(c.confidence) || 0), 0) /
-              totalChecks,
-          )
-        : 0;
-
-    const highRiskCases = severityCounts.high;
-
-    return jsonResponse({
-      totalChecks,
-      totalUsers: userCount || 0,
-      severityCounts,
-      topDiagnoses,
-      dailyChecks,
-      monthlyAssessments,
-      predictionTrend,
-      languageDistribution: langCounts,
-      languageBreakdown,
-      topSymptoms,
-      avgConfidence,
-      highRiskCases,
-    });
+    return jsonResponse(result.body, result.status);
   } catch (error) {
     console.error(
       "dashboard-stats error:",

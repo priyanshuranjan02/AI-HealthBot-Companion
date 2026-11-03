@@ -4,12 +4,15 @@ import {
   ArrowLeft, User, Save, Loader2, Building2, MapPin, Phone, Mail, History, Settings, LogOut,
   Search, Trash2, Download, Heart, Activity, AlertTriangle, Calendar, ChevronDown, ChevronUp,
   ShieldCheck, Zap, FileText, Sparkles, Stethoscope,
+  type LucideIcon,
 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { requireDeletionConfirmation } from "@/lib/accountDeletion";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ThemeToggle";
 import { generateHealthReport, generateFullHistoryReport } from "@/lib/pdfReport";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface Profile {
   id: string;
@@ -40,7 +43,7 @@ type SeverityFilter = "all" | "low" | "moderate" | "high";
 
 const Profile = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [history, setHistory] = useState<SymptomCheck[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,15 +134,18 @@ const Profile = () => {
     setDeletingAccount(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const { error } = await supabase.functions.invoke("delete-account", {
+      const { data, error } = await supabase.functions.invoke("delete-account", {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
       if (error) throw error;
-      await supabase.auth.signOut();
+      requireDeletionConfirmation(data);
+      await supabase.auth.signOut().catch(() => undefined);
       toast.success("Account deleted");
       navigate("/");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete account");
+    } catch {
+      toast.error(
+        "Deletion wasn't confirmed; it may already have completed. If you can still sign in, retry once. If not, contact support—this message doesn't confirm either outcome.",
+      );
     } finally {
       setDeletingAccount(false);
     }
@@ -584,7 +590,7 @@ const Profile = () => {
   );
 };
 
-const MiniStat = ({ icon: Icon, label, value, tone }: { icon: any; label: string; value: string | number; tone?: string }) => (
+const MiniStat = ({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: string; value: string | number; tone?: string }) => (
   <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
       <Icon className={`h-4 w-4 ${tone || "text-primary"}`} /> {label}
@@ -593,7 +599,7 @@ const MiniStat = ({ icon: Icon, label, value, tone }: { icon: any; label: string
   </div>
 );
 
-const QuickAction = ({ icon: Icon, label, hint, onClick, tone }: { icon: any; label: string; hint: string; onClick: () => void; tone: "primary" | "critical" | "accent" }) => {
+const QuickAction = ({ icon: Icon, label, hint, onClick, tone }: { icon: LucideIcon; label: string; hint: string; onClick: () => void; tone: "primary" | "critical" | "accent" }) => {
   const toneClasses = {
     primary: "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
     critical: "border-critical/30 bg-critical/5 text-critical hover:bg-critical/10",
@@ -619,7 +625,7 @@ const InfoRow = ({ label, value, tone }: { label: string; value: string; tone?: 
   </div>
 );
 
-const Field = ({ icon: Icon, label, value, onChange, placeholder, disabled }: { icon: any; label: string; value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean }) => (
+const Field = ({ icon: Icon, label, value, onChange, placeholder, disabled }: { icon: LucideIcon; label: string; value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean }) => (
   <div>
     <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
       <Icon className="h-3.5 w-3.5" /> {label}

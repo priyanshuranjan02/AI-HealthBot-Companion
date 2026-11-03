@@ -1,23 +1,27 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Activity, Users, TrendingUp, AlertTriangle, Loader2, Globe2, ShieldAlert, CalendarDays } from "lucide-react";
+import { ArrowLeft, Activity, Users, TrendingUp, AlertTriangle, Loader2, Globe2, ShieldAlert, CalendarDays, type LucideIcon } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import ThemeToggle from "@/components/ThemeToggle";
+import { currentMonthMetric, isBreakdownSuppressed, metricDisplay } from "@/lib/dashboardPrivacy";
 
 interface DashboardData {
-  totalChecks: number;
-  totalUsers: number;
-  severityCounts: { low: number; moderate: number; high: number };
+  totalChecks: number | null;
+  totalUsers: number | null;
+  severityCounts: { low: number | null; moderate: number | null; high: number | null };
   topDiagnoses: { name: string; count: number }[];
   dailyChecks: { date: string; count: number }[];
   monthlyAssessments: { month: string; count: number }[];
-  predictionTrend: { date: string; low: number; moderate: number; high: number }[];
+  predictionTrend: { date: string; low: number | null; moderate: number | null; high: number | null }[];
   languageDistribution: Record<string, number>;
   languageBreakdown: { name: string; count: number }[];
   topSymptoms: { name: string; count: number }[];
-  avgConfidence: number;
-  highRiskCases: number;
+  avgConfidence: number | null;
+  highRiskCases: number | null;
+  privacySuppressed: boolean;
+  minimumCohort: number;
+  suppressedBreakdowns: string[];
 }
 
 const SEVERITY_COLORS = ["hsl(145, 63%, 42%)", "hsl(38, 92%, 50%)", "hsl(0, 72%, 51%)"];
@@ -28,26 +32,59 @@ const Dashboard = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [accessDenied, setAccessDenied] = useState("");
 
   useEffect(() => {
     (async () => {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setAccessDenied("Sign in with an authorized NGO account to view health analytics.");
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+        if (profile?.role !== "ngo") {
+          setAccessDenied("This dashboard is available only to administrator-approved NGO accounts.");
+          return;
+        }
+
         const { data: result, error: fnError } = await supabase.functions.invoke("dashboard-stats");
         if (fnError) throw fnError;
         setData(result);
-      } catch (err: any) {
-        setError(err.message || "Failed to load dashboard data");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to load dashboard data";
+        if (/\b(401|403|forbidden|authentication required)\b/i.test(message)) {
+          setAccessDenied("Your account is not authorized to view this dashboard.");
+        } else {
+          setError(message);
+        }
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const severityPie = data ? [
-    { name: "Low", value: data.severityCounts.low },
-    { name: "Moderate", value: data.severityCounts.moderate },
-    { name: "High", value: data.severityCounts.high },
-  ] : [];
+  const severityPie = data && Object.values(data.severityCounts).every((count) => count !== null)
+    ? [
+        { name: "Low", value: data.severityCounts.low as number },
+        { name: "Moderate", value: data.severityCounts.moderate as number },
+        { name: "High", value: data.severityCounts.high as number },
+      ]
+    : [];
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = data
+    ? currentMonthMetric(data.monthlyAssessments, data.suppressedBreakdowns, currentMonth)
+    : null;
+  const languagesSuppressed = data
+    ? isBreakdownSuppressed(data.suppressedBreakdowns, "languages")
+    : true;
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,25 +101,34 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 py-8">
         {loading ? (
           <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        ) : accessDenied ? (
+          <div className="mx-auto max-w-xl rounded-2xl border border-border bg-card p-8 text-center">
+            <ShieldAlert className="mx-auto mb-4 h-10 w-10 text-primary" />
+            <h2 className="text-xl font-bold text-foreground">NGO analytics access required</h2>
+            <p className="mt-2 text-muted-foreground">{accessDenied}</p>
+            <button onClick={() => navigate("/")} className="mt-5 rounded-2xl bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg">Return home</button>
+          </div>
         ) : error ? (
           <div className="rounded-2xl border border-critical/30 bg-critical/5 p-6 text-center text-critical">{error}</div>
-        ) : !data || data.totalChecks === 0 ? (
+        ) : !data || data.privacySuppressed || data.totalChecks === 0 ? (
           <div className="py-20 text-center">
             <Activity className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-            <h2 className="text-xl font-bold text-foreground">No Data Yet</h2>
-            <p className="mt-2 text-muted-foreground">Start health checks to populate the dashboard.</p>
+            <h2 className="text-xl font-bold text-foreground">Analytics are not available yet</h2>
+            <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
+              All health statistics are currently suppressed while the trusted assessment dataset and reporting privacy rules are reviewed. A minimum cohort size alone does not guarantee privacy.
+            </p>
             <button onClick={() => navigate("/")} className="mt-4 rounded-2xl bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg">Go to Health Check</button>
           </div>
         ) : (
           <>
             {/* Stat cards */}
             <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-              <StatCard icon={Activity} label="Total Assessments" value={data.totalChecks} />
-              <StatCard icon={Users} label="Registered Users" value={data.totalUsers} />
-              <StatCard icon={TrendingUp} label="Avg Confidence" value={`${data.avgConfidence}%`} />
-              <StatCard icon={ShieldAlert} label="High Risk Cases" value={data.highRiskCases} color="text-critical" />
-              <StatCard icon={CalendarDays} label="This Month" value={data.monthlyAssessments.at(-1)?.count ?? 0} />
-              <StatCard icon={Globe2} label="Languages" value={Object.keys(data.languageDistribution).length} />
+              <StatCard icon={Activity} label="Total Assessments" value={metricDisplay(data.totalChecks)} />
+              <StatCard icon={Users} label="Registered Users" value={metricDisplay(data.totalUsers)} />
+              <StatCard icon={TrendingUp} label="Avg Confidence" value={data.avgConfidence === null ? "Suppressed" : `${data.avgConfidence}%`} />
+              <StatCard icon={ShieldAlert} label="High Risk Cases" value={metricDisplay(data.highRiskCases)} color="text-critical" />
+              <StatCard icon={CalendarDays} label="This Month" value={metricDisplay(thisMonth)} />
+              <StatCard icon={Globe2} label="Languages" value={languagesSuppressed ? "Suppressed" : Object.keys(data.languageDistribution).length} />
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -123,7 +169,7 @@ const Dashboard = () => {
                 </ChartCard>
               )}
 
-              <ChartCard title="Severity Distribution">
+              {severityPie.length > 0 && <ChartCard title="Severity Distribution">
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
                     <Pie data={severityPie} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -133,6 +179,7 @@ const Dashboard = () => {
                   </PieChart>
                 </ResponsiveContainer>
               </ChartCard>
+              }
 
               {data.languageBreakdown.length > 0 && (
                 <ChartCard title="Language Usage">
@@ -196,7 +243,7 @@ const Dashboard = () => {
   );
 };
 
-const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: string | number; color?: string }) => (
+const StatCard = ({ icon: Icon, label, value, color }: { icon: LucideIcon; label: string; value: string | number; color?: string }) => (
   <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
     <div className="flex items-center gap-3">
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">

@@ -16,7 +16,8 @@ const SiteFooter = () => (
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Product</h4>
         <ul className="space-y-1.5 text-sm">
           <li><Link to="/" className="text-foreground/80 hover:text-primary">Home</Link></li>
-          <li><Link to="/dashboard" className="text-foreground/80 hover:text-primary">NGO Dashboard</Link></li>
+          <li><Link to="/ngo/dashboard" className="text-foreground/80 hover:text-primary">NGO Dashboard</Link></li>
+          <li><Link to="/ngo/application" className="text-foreground/80 hover:text-primary">NGO application status</Link></li>
           <li><Link to="/profile" className="text-foreground/80 hover:text-primary">My Account</Link></li>
         </ul>
       </div>
@@ -27,6 +28,7 @@ const SiteFooter = () => (
           <li><Link to="/contact" className="text-foreground/80 hover:text-primary">Contact</Link></li>
           <li><Link to="/privacy" className="text-foreground/80 hover:text-primary">Privacy & Terms</Link></li>
           <li><Link to="/privacy" className="text-foreground/80 hover:text-primary">Medical Disclaimer</Link></li>
+          <li><Link to="/admin/login" className="text-foreground/80 hover:text-primary">Administrator sign in</Link></li>
         </ul>
       </div>
       <div>

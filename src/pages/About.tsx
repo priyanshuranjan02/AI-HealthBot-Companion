@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Target, Cpu, Users, Sparkles, ShieldCheck, Globe2, Layers } from "lucide-react";
+import { ArrowLeft, Target, Cpu, Users, Sparkles, ShieldCheck, Globe2, Layers, type LucideIcon } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const About = () => {
@@ -86,7 +86,7 @@ const Section = ({
   title,
   children,
 }: {
-  icon: any;
+  icon: LucideIcon;
   title: string;
   children: React.ReactNode;
 }) => (
