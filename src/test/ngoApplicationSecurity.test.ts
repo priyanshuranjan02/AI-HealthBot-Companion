@@ -8,6 +8,9 @@ const workflow = readFileSync(join(root, "supabase/functions/ngo-application/wor
 const migration = readFileSync(join(root, "supabase/migrations/20261019090000_admin_ngo_verification.sql"), "utf8");
 const appRoutes = readFileSync(join(root, "src/App.tsx"), "utf8");
 const authPage = readFileSync(join(root, "src/pages/Auth.tsx"), "utf8");
+const vercelConfig = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8")) as {
+  rewrites: Array<{ source: string; destination: string }>;
+};
 
 describe("NGO Edge Function and database contract", () => {
   it("authenticates the bearer token and scopes status reads to its verified user", () => {
@@ -44,11 +47,20 @@ describe("NGO Edge Function and database contract", () => {
 
   it("keeps admin login separate from public signup and protects workflow routes", () => {
     expect(appRoutes).toContain('path="/admin/login" element={<Auth mode="admin" />');
+    expect(appRoutes).toContain('path="/auth" element={<Auth />}');
+    expect(authPage).toContain('"/admin/login?recovery=1"');
+    expect(authPage).toContain('"/auth?recovery=1"');
     expect(appRoutes).toContain('path="/ngo/login" element={<Auth mode="ngo" />');
     expect(appRoutes).toContain('path="/admin/ngo-verification" element={<AdminDashboard />');
     expect(readFileSync(join(root, "src/pages/AdminDashboard.tsx"), "utf8")).toContain('invoke("admin-ngo-management"');
     expect(appRoutes).toContain('path="/ngo/dashboard" element={<RequireSession');
     expect(authPage).toContain('const loginOnly = mode !== "standard"');
-    expect(authPage).toContain("!loginOnly && <p");
+    expect(authPage).toContain("!loginOnly && !resetRequest && !passwordRecovery && <p");
+  });
+
+  it("rewrites direct SPA and password-recovery requests to the Vite entry point", () => {
+    expect(vercelConfig.rewrites).toContainEqual({ source: "/(.*)", destination: "/index.html" });
+    expect(appRoutes).toContain('path="/admin/login" element={<Auth mode="admin" />');
+    expect(appRoutes).toContain('path="/auth" element={<Auth />}');
   });
 });
