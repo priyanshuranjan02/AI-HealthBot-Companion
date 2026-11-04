@@ -1,26 +1,21 @@
-# Auth URL Configuration — read-only findings (no changes made)
+# Auth URL Configuration: read-only re-check (no changes made)
 
 ## Verified identity
-- Lovable Cloud backend ref: `nbqphskrnstcmudvhzie`, environment `prod` (one instance serves Lovable preview and published app).
-- The live Vercel site (https://ai-health-bot-companion.vercel.app, HTTP 200) ships a JS bundle pointing to `nbqphskrnstcmudvhzie.supabase.co`. So the Vercel app uses the same backend as this Lovable project.
+- Backend ref `nbqphskrnstcmudvhzie`, environment `prod`.
+- The live Vercel bundle points to the same backend.
 
-## Current settings (read directly)
-- Site URL: `https://id-preview--cc7a15fd-139e-4990-88aa-59a17264f910.lovable.app` (Lovable preview, not Vercel).
-- Redirect allowlist: only Lovable-hosted addresses (preview, project, lovableproject.com, `health-kind-ai.lovable.app`). No `ai-health-bot-companion.vercel.app` entry.
-- Impact: recovery links redirecting to `.../admin/login?recovery=1` and `.../auth?recovery=1` will be rejected and fall back to the Site URL (Lovable preview).
+## Live settings now
+- Site URL: `https://ai-health-bot-companion.vercel.app/`. This changed since the last check; it was the Lovable preview before.
+- Redirect allowlist: still only the 10 Lovable-hosted entries. `https://ai-health-bot-companion.vercel.app/**` is **NOT present**.
 
-## Can it be changed through this integration?
-- Redirect URLs: no agent tool edits them. Owner action required.
-- Site URL: no supported agent tool sets it to a custom external value. Lovable sync also replaces a Lovable-hosted/empty Site URL with its own preview/published address; a non-Lovable domain is kept, but enabling the OAuth server would reset it.
+## Recovery path coverage
+- `https://ai-health-bot-companion.vercel.app/admin/login?recovery=1`: not on the allowlist.
+- `https://ai-health-bot-companion.vercel.app/auth?recovery=1`: not on the allowlist.
+- Likely effect: a recovery link that asks for either address is not accepted as an explicit redirect. Auth falls back to the Site URL, which is the Vercel root without the path or `?recovery=1`. So the recovery screens probably won't open. I have not tested this.
 
-## Owner action required
-In Lovable: More -> Users -> Auth settings -> Advanced:
-1. Add Redirect URL `https://ai-health-bot-companion.vercel.app/**` (covers both recovery paths with query strings). Optionally add the two exact URLs too.
-2. Optionally set Site URL to `https://ai-health-bot-companion.vercel.app` if Vercel is the canonical production frontend (this changes the fallback for all auth emails, including Lovable-preview signups).
-3. Keep existing Lovable entries (max 50 total).
-
-## After owner action (when approved)
-- Re-read settings read-only with the same inspection to confirm entries.
-- Optionally trigger one password reset to a test account and confirm the link lands on the Vercel recovery page.
+## Owner action still required
+1. In More -> Users -> Auth settings -> Advanced -> Redirect URLs, add `https://ai-health-bot-companion.vercel.app/**` and save.
+2. Confirm the entry stays after the page reloads. It may have been typed into the Site URL field by mistake, since the Site URL is the only thing that changed.
+3. Then ask me for another read-only re-check.
 
 No code, deployment, database, role or setting changes are proposed by me.
