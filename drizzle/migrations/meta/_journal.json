@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793863313320,
+      "tag": "0000_lovable_profile_role_insert_hardening",
+      "breakpoints": true
+    }
+  ]
+}
