@@ -14,6 +14,127 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          anonymized_at: string | null
+          application_id: string | null
+          created_at: string
+          details: Json
+          id: string
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          anonymized_at?: string | null
+          application_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          anonymized_at?: string | null
+          application_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_audit_log_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "ngo_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_audit_log_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ngo_applications: {
+        Row: {
+          applicant_user_id: string
+          created_at: string
+          decided_at: string | null
+          evidence_references: Json
+          id: string
+          official_contact_email: string
+          official_contact_phone: string
+          organization_name: string
+          registration_identifier: string
+          review_reason: string | null
+          reviewer_id: string | null
+          status: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          applicant_user_id: string
+          created_at?: string
+          decided_at?: string | null
+          evidence_references?: Json
+          id?: string
+          official_contact_email: string
+          official_contact_phone: string
+          organization_name: string
+          registration_identifier: string
+          review_reason?: string | null
+          reviewer_id?: string | null
+          status?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          applicant_user_id?: string
+          created_at?: string
+          decided_at?: string | null
+          evidence_references?: Json
+          id?: string
+          official_contact_email?: string
+          official_contact_phone?: string
+          organization_name?: string
+          registration_identifier?: string
+          review_reason?: string | null
+          reviewer_id?: string | null
+          status?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ngo_applications_applicant_user_id_fkey"
+            columns: ["applicant_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ngo_applications_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -89,12 +210,59 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_ngo_dashboard_stats: { Args: never; Returns: Json }
+      review_ngo_application: {
+        Args: {
+          p_application_id: string
+          p_reason?: string
+          p_reviewer_id: string
+          p_status: string
+        }
+        Returns: undefined
+      }
+      submit_ngo_application: {
+        Args: {
+          p_applicant_user_id: string
+          p_evidence_references: Json
+          p_official_contact_email: string
+          p_official_contact_phone: string
+          p_organization_name: string
+          p_registration_identifier: string
+          p_website: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
