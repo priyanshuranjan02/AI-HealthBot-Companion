@@ -7,6 +7,7 @@ const endpoint = readFileSync(join(root, "supabase/functions/ngo-application/ind
 const workflow = readFileSync(join(root, "supabase/functions/ngo-application/workflow.ts"), "utf8");
 const migration = readFileSync(join(root, "supabase/migrations/20261019090000_admin_ngo_verification.sql"), "utf8");
 const appRoutes = readFileSync(join(root, "src/App.tsx"), "utf8");
+const homePage = readFileSync(join(root, "src/pages/Index.tsx"), "utf8");
 const authPage = readFileSync(join(root, "src/pages/Auth.tsx"), "utf8");
 const vercelConfig = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8")) as {
   rewrites: Array<{ source: string; destination: string }>;
@@ -28,6 +29,26 @@ describe("NGO Edge Function and database contract", () => {
     expect(workflow).toContain('current.application.status !== "rejected"');
     expect(workflow).toContain('if (result.errorCode === "42501")');
     expect(workflow).toContain('if (result.errorCode === "23505")');
+  });
+
+  it("returns the own-application dashboard allowlist without evidence or identity fields", () => {
+    expect(endpoint).toContain('select("role").eq("id", userId)');
+    expect(endpoint).toContain('.select("id, organization_name, registration_identifier, official_contact_email, official_contact_phone, website, status, review_reason, decided_at, created_at")');
+    expect(endpoint).toContain('.eq("applicant_user_id", userId)');
+    expect(workflow).toContain("safeApplicationProjection(current.application)");
+    expect(workflow).toContain('current.profileRole === "ngo" && application?.status === "approved"');
+    expect(workflow).not.toContain("evidence_references:");
+    expect(workflow).not.toContain("reviewer_id:");
+    expect(workflow).not.toContain("applicant_user_id:");
+  });
+
+  it("keeps the organization dashboard away from raw symptom and audit tables", () => {
+    const dashboard = readFileSync(join(root, "src/pages/Dashboard.tsx"), "utf8");
+    expect(dashboard).toContain('invoke("ngo-application"');
+    expect(dashboard).toContain('invoke("dashboard-stats"');
+    expect(dashboard).not.toContain('.from("symptom_checks")');
+    expect(dashboard).not.toContain('.from("admin_audit_log")');
+    expect(dashboard).not.toContain("evidence_references");
   });
 
   it("passes the verified identity and exact parameters to the service-only submission RPC", () => {
@@ -54,6 +75,9 @@ describe("NGO Edge Function and database contract", () => {
     expect(appRoutes).toContain('path="/admin/ngo-verification" element={<AdminDashboard />');
     expect(readFileSync(join(root, "src/pages/AdminDashboard.tsx"), "utf8")).toContain('invoke("admin-ngo-management"');
     expect(appRoutes).toContain('path="/ngo/dashboard" element={<RequireSession');
+    expect(appRoutes).toContain('path="/dashboard" element={<RequireSession');
+    expect(homePage).toContain('navigate(user ? "/ngo/dashboard" : "/ngo/login")');
+    expect(homePage).toContain('navigate(user ? "/ngo/application" : "/ngo/login")');
     expect(authPage).toContain('const loginOnly = mode !== "standard"');
     expect(authPage).toContain("!loginOnly && !resetRequest && !passwordRecovery && <p");
   });

@@ -930,3 +930,36 @@ The candidate preserves the six authenticated profile-update columns above and e
 The dedicated SQL suite excludes NGO/admin workflow assertions and covers the profile/signup and symptom baseline. It requires a trusted disposable test runner able to `SET LOCAL ROLE sandbox_exec`; the inspected sandbox membership has `set_option = false`, so ordinary membership does not itself authorize that role switch. Do not alter role membership to force the test to pass. The suite runs inside a transaction and rolls synthetic writes back. Its service-role profile UPDATE check verifies only the database privilege/trigger path and does not test administrator authorization. Auth API signup with hostile `admin`/`ngo` metadata remains a separate integration test. Neither the migration nor tests have been executed as part of this implementation pass.
 
 Before considering staging, obtain an authorized read-only preflight of exact target identity, ledger state, owners, role/function definitions and ACLs, policy predicates, trigger state, column/table ACLs, role memberships, and profile-role data. Use a new disposable fixture for runtime validation. Keep the reviewed SQL hash, test output, approved change record, and pre/post catalog evidence. No deployment or production change is authorized by this local candidate.
+
+## NGO organization dashboard
+
+The `/ngo/dashboard` route (and legacy `/dashboard` alias) requires a session,
+then calls the authenticated `ngo-application` status action. The Edge
+Function verifies the bearer token, derives the user identity from that token,
+and returns only the current user's allowlisted application fields and
+eligibility flags. The browser treats the dashboard as available only when
+the persisted profile role is `ngo`, the latest application is `approved`,
+and the server response flags agree. Only then does it request
+`dashboard-stats`; that function independently checks the verified identity,
+profile role, and latest persisted application status before invoking its
+aggregate RPC. The page never reads symptom rows, audit records, reviewer
+identities, or evidence references directly.
+
+The status projection is implemented by the `ngo-application` Edge Function.
+The latest `origin/main` already contains this status projection; this feature
+branch therefore does not duplicate those Edge Function changes. Deploy the
+updated frontend and Edge Function together only through the normal reviewed
+release process. No deployment is performed by this change.
+
+Pending, rejected, suspended, absent, or inconsistent application states have
+separate portal messaging. Rejected applications may resubmit through the
+existing workflow. Suspended accounts cannot automatically reapply; they
+require administrator reinstatement. Whether a reinstated account should then
+be allowed to submit a new application remains a product decision. The
+current backend rejects suspended-state submissions, and this feature keeps
+that behavior unchanged. Community Health Insights remain withheld unless the
+response explicitly reports `privacySuppressed: false` and a positive finite
+assessment total; withheld or malformed results never render charts. This
+frontend state is not a substitute for the Edge Function/database authorization
+checks and does not establish that the current production backend has the
+matching objects deployed.
