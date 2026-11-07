@@ -45,6 +45,10 @@ describe("NGO application server workflow", () => {
     const application = state ? {
       id: "application-1",
       organization_name: "Example Health NGO",
+      registration_identifier: "REG-1",
+      official_contact_email: "ngo@example.org",
+      official_contact_phone: "+910000000000",
+      website: null,
       status: state,
       review_reason: null,
       decided_at: null,
@@ -77,6 +81,10 @@ describe("NGO application server workflow", () => {
         application: {
           id: "application-1",
           organization_name: "Example Health NGO",
+          registration_identifier: "REG-1",
+          official_contact_email: "ngo@example.org",
+          official_contact_phone: "+910000000000",
+          website: null,
           status: state,
           review_reason: null,
           decided_at: null,
@@ -96,6 +104,10 @@ describe("NGO application server workflow", () => {
         application: {
           id: "application-1",
           organization_name: "Example Health NGO",
+          registration_identifier: "REG-1",
+          official_contact_email: "ngo@example.org",
+          official_contact_phone: "+910000000000",
+          website: null,
           status: "rejected" as const,
           review_reason: "Please provide updated details.",
           decided_at: "2026-10-31T00:00:00Z",
