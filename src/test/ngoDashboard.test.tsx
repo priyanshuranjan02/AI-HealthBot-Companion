@@ -78,6 +78,24 @@ const releasedAnalytics = {
   suppressedBreakdowns: [],
 };
 
+const fullySuppressedProductionAnalytics = {
+  privacySuppressed: true,
+  totalChecks: null,
+  totalUsers: null,
+  severityCounts: { low: null, moderate: null, high: null },
+  topDiagnoses: [],
+  dailyChecks: [],
+  monthlyAssessments: [],
+  predictionTrend: [],
+  languageDistribution: {},
+  languageBreakdown: [],
+  topSymptoms: [],
+  avgConfidence: null,
+  highRiskCases: null,
+  minimumCohort: 10,
+  suppressedBreakdowns: ["all"],
+};
+
 const mountDirectDashboardRoute = () => render(
   <MemoryRouter initialEntries={["/ngo/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
     <Routes>
@@ -176,6 +194,61 @@ describe("NGO organization dashboard", () => {
     expect(screen.queryByText(/assessment summary/i)).not.toBeInTheDocument();
   });
 
+  it("keeps the existing fully suppressed production response withheld", async () => {
+    mocks.invoke.mockImplementation(async (name: string) => name === "ngo-application"
+      ? { data: statusResponse(application("approved"), "ngo"), error: null }
+      : { data: fullySuppressedProductionAnalytics, error: null });
+    mountDirectDashboardRoute();
+    expect(await screen.findByText("Health statistics are currently withheld")).toBeInTheDocument();
+    expect(screen.queryByText("Total Assessments")).not.toBeInTheDocument();
+    expect(screen.queryByText("Example diagnosis")).not.toBeInTheDocument();
+  });
+
+  it("rejects a globally suppressed response even when privacySuppressed is false", async () => {
+    mocks.invoke.mockImplementation(async (name: string) => name === "ngo-application"
+      ? { data: statusResponse(application("approved"), "ngo"), error: null }
+      : { data: { ...releasedAnalytics, suppressedBreakdowns: ["all"] }, error: null });
+    mountDirectDashboardRoute();
+    expect(await screen.findByText("Health statistics are currently withheld")).toBeInTheDocument();
+    expect(screen.queryByText("Most Common Diagnoses")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["totalUsers", "totalUsers"],
+    ["avgConfidence", "avgConfidence"],
+    ["highRiskCases", "highRiskCases"],
+  ])("rejects a non-null %s value when that metric is suppressed", async (breakdown, metric) => {
+    mocks.invoke.mockImplementation(async (name: string) => name === "ngo-application"
+      ? { data: statusResponse(application("approved"), "ngo"), error: null }
+      : { data: { ...releasedAnalytics, suppressedBreakdowns: [breakdown] }, error: null });
+    mountDirectDashboardRoute();
+    expect(await screen.findByText("Health statistics are currently withheld")).toBeInTheDocument();
+    const metricValues: Record<string, string> = {
+      totalUsers: "10",
+      avgConfidence: "82%",
+      highRiskCases: "2",
+    };
+    expect(screen.queryByText(metricValues[metric])).not.toBeInTheDocument();
+  });
+
+  it("renders explicitly suppressed summary metrics only when their values are null", async () => {
+    mocks.invoke.mockImplementation(async (name: string) => name === "ngo-application"
+      ? { data: statusResponse(application("approved"), "ngo"), error: null }
+      : { data: {
+          ...releasedAnalytics,
+          totalUsers: null,
+          avgConfidence: null,
+          highRiskCases: null,
+          suppressedBreakdowns: ["totalUsers", "avgConfidence", "highRiskCases"],
+        }, error: null });
+    mountDirectDashboardRoute();
+    expect(await screen.findByText("Total Assessments")).toBeInTheDocument();
+    expect(screen.getByText("Registered Users").parentElement).toHaveTextContent("Suppressed");
+    expect(screen.getByText("Avg Confidence").parentElement).toHaveTextContent("Suppressed");
+    expect(screen.getByText("High Risk Cases").parentElement).toHaveTextContent("Suppressed");
+    expect(screen.getByText("Most Common Diagnoses")).toBeInTheDocument();
+  });
+
   it("renders aggregate charts only for an explicitly released valid response", async () => {
     mocks.invoke.mockImplementation(async (name: string) => name === "ngo-application"
       ? { data: statusResponse(application("approved"), "ngo"), error: null }
@@ -184,6 +257,9 @@ describe("NGO organization dashboard", () => {
     expect(await screen.findByText("Total Assessments")).toBeInTheDocument();
     expect(screen.getByText("Most Common Diagnoses")).toBeInTheDocument();
     expect(screen.getByText("Most Common Symptoms")).toBeInTheDocument();
+    expect(screen.getByText("Registered Users").parentElement).toHaveTextContent("10");
+    expect(screen.getByText("Avg Confidence").parentElement).toHaveTextContent("82%");
+    expect(screen.getByText("High Risk Cases").parentElement).toHaveTextContent("2");
   });
 
   it("retries a failed status verification", async () => {

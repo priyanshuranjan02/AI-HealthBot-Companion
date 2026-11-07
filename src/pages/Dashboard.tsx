@@ -92,11 +92,16 @@ const isCountRows = (value: unknown, key: string): boolean =>
 
 const isDashboardData = (value: unknown): value is DashboardData => {
   if (!canRenderAnalytics(value) || !isRecord(value)) return false;
+  const suppressedBreakdowns = value.suppressedBreakdowns;
+  if (!Array.isArray(suppressedBreakdowns) || !suppressedBreakdowns.every((item) => typeof item === "string")) return false;
+  if (suppressedBreakdowns.includes("all")) return false;
+
   const severity = value.severityCounts;
+  if (!isRecord(severity)) return false;
   const trendValid = Array.isArray(value.predictionTrend) && value.predictionTrend.every((item) =>
     isRecord(item) && typeof item.date === "string" && [item.low, item.moderate, item.high].every((count) => count === null || isCount(count)));
-  return isCount(value.totalChecks) && value.totalChecks > 0 &&
-    (value.totalUsers === null || isCount(value.totalUsers)) && isRecord(severity) &&
+  const metricsValid = isCount(value.totalChecks) && value.totalChecks > 0 &&
+    (value.totalUsers === null || isCount(value.totalUsers)) &&
     [severity.low, severity.moderate, severity.high].every((count) => count === null || isCount(count)) &&
     isCountRows(value.topDiagnoses, "name") &&
     Array.isArray(value.dailyChecks) && value.dailyChecks.every((row) => isRecord(row) && typeof row.date === "string" && isCount(row.count)) &&
@@ -105,8 +110,29 @@ const isDashboardData = (value: unknown): value is DashboardData => {
     isCountRows(value.languageBreakdown, "name") && isCountRows(value.topSymptoms, "name") &&
     (value.avgConfidence === null || isCount(value.avgConfidence)) &&
     (value.highRiskCases === null || isCount(value.highRiskCases)) &&
-    typeof value.minimumCohort === "number" && Number.isFinite(value.minimumCohort) &&
-    Array.isArray(value.suppressedBreakdowns) && value.suppressedBreakdowns.every((item) => typeof item === "string");
+    typeof value.minimumCohort === "number" && Number.isFinite(value.minimumCohort);
+  if (!metricsValid) return false;
+
+  const isSuppressed = (breakdown: string) => suppressedBreakdowns.includes(breakdown);
+  const suppressedMetricIsNull = (breakdown: string, metric: unknown) => !isSuppressed(breakdown) || metric === null;
+  const suppressedArrayIsEmpty = (breakdown: string, items: unknown) =>
+    !isSuppressed(breakdown) || (Array.isArray(items) && items.length === 0);
+  const languagesSuppressed = isSuppressed("languages");
+
+  // A suppression flag paired with data is contradictory. Treat the complete
+  // response as untrusted so another card or chart cannot reveal the same data.
+  return suppressedMetricIsNull("totalUsers", value.totalUsers) &&
+    suppressedMetricIsNull("avgConfidence", value.avgConfidence) &&
+    suppressedMetricIsNull("highRiskCases", value.highRiskCases) &&
+    !isSuppressed("totalChecks") &&
+    (!isSuppressed("severityCounts") || [severity.low, severity.moderate, severity.high].every((count) => count === null)) &&
+    suppressedArrayIsEmpty("topDiagnoses", value.topDiagnoses) &&
+    suppressedArrayIsEmpty("dailyChecks", value.dailyChecks) &&
+    suppressedArrayIsEmpty("monthlyAssessments", value.monthlyAssessments) &&
+    suppressedArrayIsEmpty("predictionTrend", value.predictionTrend) &&
+    (!languagesSuppressed || (Object.keys(value.languageDistribution as Record<string, unknown>).length === 0 &&
+      Array.isArray(value.languageBreakdown) && value.languageBreakdown.length === 0)) &&
+    suppressedArrayIsEmpty("topSymptoms", value.topSymptoms);
 };
 
 const formatDate = (value: string | null | undefined): string | null => {
@@ -269,10 +295,10 @@ const AnalyticsCharts = ({ data }: { data: DashboardData }) => {
 
   return <>
     <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-      <StatCard icon={Activity} label="Total Assessments" value={metricDisplay(data.totalChecks)} />
-      <StatCard icon={Users} label="Registered Users" value={metricDisplay(data.totalUsers)} />
-      <StatCard icon={TrendingUp} label="Avg Confidence" value={data.avgConfidence === null ? "Suppressed" : `${data.avgConfidence}%`} />
-      <StatCard icon={AlertTriangle} label="High Risk Cases" value={metricDisplay(data.highRiskCases)} color="text-critical" />
+      <StatCard icon={Activity} label="Total Assessments" value={metricDisplay(isBreakdownSuppressed(data.suppressedBreakdowns, "totalChecks") ? null : data.totalChecks)} />
+      <StatCard icon={Users} label="Registered Users" value={metricDisplay(isBreakdownSuppressed(data.suppressedBreakdowns, "totalUsers") ? null : data.totalUsers)} />
+      <StatCard icon={TrendingUp} label="Avg Confidence" value={isBreakdownSuppressed(data.suppressedBreakdowns, "avgConfidence") || data.avgConfidence === null ? "Suppressed" : `${data.avgConfidence}%`} />
+      <StatCard icon={AlertTriangle} label="High Risk Cases" value={metricDisplay(isBreakdownSuppressed(data.suppressedBreakdowns, "highRiskCases") ? null : data.highRiskCases)} color="text-critical" />
       <StatCard icon={CalendarDays} label="This Month" value={metricDisplay(thisMonth)} />
       <StatCard icon={Globe2} label="Languages" value={languagesSuppressed ? "Suppressed" : Object.keys(data.languageDistribution).length} />
     </div>
