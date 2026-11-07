@@ -953,13 +953,16 @@ release process. No deployment is performed by this change.
 
 Pending, rejected, suspended, absent, or inconsistent application states have
 separate portal messaging. Rejected applications may resubmit through the
-existing workflow. Suspended accounts cannot automatically reapply; they
-require administrator reinstatement. Whether a reinstated account should then
-be allowed to submit a new application remains a product decision. The
-current backend rejects suspended-state submissions, and this feature keeps
-that behavior unchanged. Community Health Insights remain withheld unless the
-response explicitly reports `privacySuppressed: false` and a positive finite
-assessment total; withheld or malformed results never render charts. This
-frontend state is not a substitute for the Edge Function/database authorization
-checks and does not establish that the current production backend has the
-matching objects deployed.
+existing workflow. Suspended accounts cannot automatically reapply and require
+administrator reinstatement. The current backend rejects suspended-state
+submissions, and this feature keeps that behavior unchanged. However, the
+existing Admin dashboard and `review_ngo_application` RPC do not provide a
+reinstatement transition: the RPC permits pending-to-approved/rejected and
+approved-to-suspended transitions. Until a separately reviewed admin
+reinstatement workflow is added, suspended accounts must contact support and
+cannot be reinstated through the current in-app Admin dashboard. Community
+Health Insights remain withheld unless the response explicitly reports
+`privacySuppressed: false` and a positive finite assessment total; withheld or
+malformed results never render charts. This frontend state is not a substitute
+for the Edge Function/database authorization checks and does not establish
+that the current production backend has the matching objects deployed.
