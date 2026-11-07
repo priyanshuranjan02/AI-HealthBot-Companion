@@ -58,7 +58,7 @@ const Index = () => {
         </span>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate("/ngo/dashboard")}
+            onClick={() => navigate(user ? "/ngo/dashboard" : "/ngo/login")}
             className="flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <BarChart3 className="h-3.5 w-3.5" />

@@ -29,6 +29,17 @@ export type PrivacySafeAnalytics = {
   suppressedBreakdowns: string[];
 };
 
+/** Only explicitly released, well-formed positive assessment totals may
+ * unlock analytics rendering. Missing or malformed server fields stay hidden. */
+export const canRenderAnalytics = (data: unknown): boolean => {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return false;
+  const value = data as { privacySuppressed?: unknown; totalChecks?: unknown };
+  return value.privacySuppressed === false
+    && typeof value.totalChecks === "number"
+    && Number.isFinite(value.totalChecks)
+    && value.totalChecks > 0;
+};
+
 /**
  * Fail-closed response while raw assessment rows remain caller-controlled.
  * Input rows are intentionally ignored: threshold suppression alone cannot

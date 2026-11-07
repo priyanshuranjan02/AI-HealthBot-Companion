@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPrivacySafeAnalytics,
+  canRenderAnalytics,
   currentMonthMetric,
   metricDisplay,
   type AssessmentForAnalytics,
@@ -21,6 +22,31 @@ const repeated = (count: number, row: Partial<AssessmentForAnalytics> = {}) =>
   Array.from({ length: count }, () => row);
 
 describe("privacy-safe health analytics", () => {
+  it.each([
+    undefined,
+    null,
+    false,
+    [],
+    {},
+    { totalChecks: 1 },
+    { privacySuppressed: true, totalChecks: 10 },
+    { privacySuppressed: "false", totalChecks: 10 },
+    { privacySuppressed: false, totalChecks: null },
+    { privacySuppressed: false, totalChecks: "10" },
+    { privacySuppressed: false, totalChecks: 0 },
+    { privacySuppressed: false, totalChecks: -1 },
+    { privacySuppressed: false, totalChecks: Number.NaN },
+    { privacySuppressed: false, totalChecks: Number.POSITIVE_INFINITY },
+    { privacySuppressed: false, totalChecks: Number.NEGATIVE_INFINITY },
+  ])("keeps malformed or suppressed analytics hidden (%s)", (value) => {
+    expect(canRenderAnalytics(value)).toBe(false);
+  });
+
+  it("renders only an explicitly unsuppressed positive finite total", () => {
+    expect(canRenderAnalytics({ privacySuppressed: false, totalChecks: 1 })).toBe(true);
+    expect(canRenderAnalytics({ privacySuppressed: false, totalChecks: 10 })).toBe(true);
+  });
+
   const expectFailClosed = (rows: AssessmentForAnalytics[]) => {
     const result = buildPrivacySafeAnalytics(rows);
 
