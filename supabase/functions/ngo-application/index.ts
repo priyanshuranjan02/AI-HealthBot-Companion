@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
       const [profileResult, applicationResult] = await Promise.all([
         admin.from("profiles").select("role").eq("id", userId).maybeSingle(),
         admin.from("ngo_applications")
-          .select("id, organization_name, status, review_reason, decided_at, created_at")
+          .select("id, organization_name, registration_identifier, official_contact_email, official_contact_phone, website, status, review_reason, decided_at, created_at")
           .eq("applicant_user_id", userId)
           .order("created_at", { ascending: false })
           .order("id", { ascending: false })

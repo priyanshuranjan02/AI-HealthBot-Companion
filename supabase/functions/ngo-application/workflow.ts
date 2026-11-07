@@ -1,10 +1,21 @@
 export type NgoApplicationStatus = {
   id: string;
   organization_name: string;
+  registration_identifier: string;
+  official_contact_email: string;
+  official_contact_phone: string;
+  website: string | null;
   status: "pending" | "approved" | "rejected" | "suspended";
   review_reason: string | null;
   decided_at: string | null;
   created_at: string;
+};
+
+export type NgoApplicationStatusResponse = {
+  application: NgoApplicationStatus | null;
+  profileRole: string | null;
+  canSubmit: boolean;
+  dashboardAvailable: boolean;
 };
 
 export type NgoApplicationInput = {
@@ -25,6 +36,28 @@ export type NgoApplicationServices = {
 export type NgoApplicationResult = { status: number; body: Record<string, unknown> };
 const failure = (status: number, error: string): NgoApplicationResult => ({ status, body: { error } });
 const isText = (value: unknown, max: number) => typeof value === "string" && value.trim().length > 0 && value.length <= max;
+const applicationStatuses = new Set(["pending", "approved", "rejected", "suspended"]);
+
+/** Rebuild the status object from the response allowlist so database or service
+ * client fields added later cannot leak applicant IDs, evidence, or audit data. */
+const safeApplicationProjection = (application: NgoApplicationStatus | null) => {
+  if (!application) return null;
+  if (!applicationStatuses.has(application.status)) {
+    throw new Error("Unsupported NGO application status");
+  }
+  return {
+    id: application.id,
+    organization_name: application.organization_name,
+    registration_identifier: application.registration_identifier,
+    official_contact_email: application.official_contact_email,
+    official_contact_phone: application.official_contact_phone,
+    website: application.website,
+    status: application.status,
+    review_reason: application.review_reason,
+    decided_at: application.decided_at,
+    created_at: application.created_at,
+  } satisfies NgoApplicationStatus;
+};
 
 /** The authenticated identity always comes from token validation, never from
  * a caller-supplied user ID. Application persistence remains in the audited RPC. */
@@ -47,11 +80,12 @@ export const ngoApplicationWorkflow = async (
   try {
     if (action === "status") {
       const current = await services.getStatus(userId);
-      const application = current.application;
+      const application = safeApplicationProjection(current.application);
       return {
         status: 200,
         body: {
           application,
+          profileRole: current.profileRole,
           canSubmit: current.profileRole === "user" && (!application || application.status === "rejected"),
           dashboardAvailable: current.profileRole === "ngo" && application?.status === "approved",
         },
