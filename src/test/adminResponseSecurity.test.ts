@@ -13,7 +13,7 @@ describe("admin authorization and response minimization", () => {
     expect(availableReviewActions("pending")).toEqual(["approved", "rejected"]);
     expect(availableReviewActions("approved")).toEqual(["suspended"]);
     expect(availableReviewActions("rejected")).toEqual([]);
-    expect(availableReviewActions("suspended")).toEqual([]);
+    expect(availableReviewActions("suspended")).toEqual(["reinstate"]);
   });
 
   it("omits applicant identifiers and evidence references from the browser response", () => {

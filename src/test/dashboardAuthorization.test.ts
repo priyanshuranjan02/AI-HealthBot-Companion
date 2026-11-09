@@ -46,6 +46,20 @@ describe("server-side NGO analytics authorization", () => {
     expect(deps.getStats).not.toHaveBeenCalled();
   });
 
+  it("restores NGO dashboard authorization only when role and latest status both agree", async () => {
+    const eligible = services();
+    expect((await dashboardStatsWorkflow("valid-token", eligible)).status).toBe(200);
+    expect(eligible.getStats).toHaveBeenCalledOnce();
+
+    const roleMismatch = services({ getProfileRole: vi.fn(async () => "user") });
+    expect((await dashboardStatsWorkflow("valid-token", roleMismatch)).status).toBe(403);
+    expect(roleMismatch.getStats).not.toHaveBeenCalled();
+
+    const statusMismatch = services({ getLatestApplicationStatus: vi.fn(async () => "suspended") });
+    expect((await dashboardStatsWorkflow("valid-token", statusMismatch)).status).toBe(403);
+    expect(statusMismatch.getStats).not.toHaveBeenCalled();
+  });
+
   it("invokes the aggregate RPC only after both persisted checks pass", async () => {
     const order: string[] = [];
     const deps = services();

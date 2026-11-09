@@ -41,6 +41,31 @@ Deno.serve(async (req) => {
     if (body?.action === "check-access") {
       return response({ authorized: true });
     }
+    if (body?.action === "reinstate") {
+      const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(applicationId);
+      if (!isUuid || !reason || Array.from(reason).length > 2000) {
+        return response({ error: "A valid application and a reason of 1–2,000 characters are required" }, 400);
+      }
+
+      const { error } = await admin.rpc("reinstate_ngo_application", {
+        p_reviewer_id: auth.user.id,
+        p_application_id: applicationId,
+        p_reason: reason,
+      });
+      if (error) {
+        if (error.code === "42501" && error.message === "Administrators cannot reinstate their own NGO application") {
+          return response({ error: "Administrators cannot reinstate their own applications" }, 403);
+        }
+        if (error.code === "42501") return response({ error: "Administrator access required" }, 403);
+        if (error.code === "P0002") return response({ error: "This application is no longer eligible for reinstatement. Refresh and review its current status." }, 409);
+        if (error.code === "22023") return response({ error: "A valid reinstatement reason is required" }, 400);
+        return response({ error: "Unable to reinstate NGO access" }, 400);
+      }
+      return response({ success: true });
+    }
+
     if (body?.action === "review") {
       const validStatus = ["approved", "rejected", "suspended"].includes(body.status);
       const reason = typeof body.reason === "string" ? body.reason.trim() : "";

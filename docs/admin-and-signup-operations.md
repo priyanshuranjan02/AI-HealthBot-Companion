@@ -953,16 +953,43 @@ release process. No deployment is performed by this change.
 
 Pending, rejected, suspended, absent, or inconsistent application states have
 separate portal messaging. Rejected applications may resubmit through the
-existing workflow. Suspended accounts cannot automatically reapply and require
-administrator reinstatement. The current backend rejects suspended-state
-submissions, and this feature keeps that behavior unchanged. However, the
-existing Admin dashboard and `review_ngo_application` RPC do not provide a
-reinstatement transition: the RPC permits pending-to-approved/rejected and
-approved-to-suspended transitions. Until a separately reviewed admin
-reinstatement workflow is added, suspended accounts must contact support and
-cannot be reinstated through the current in-app Admin dashboard. Community
-Health Insights remain withheld unless the response explicitly reports
-`privacySuppressed: false` and a positive finite assessment total; withheld or
-malformed results never render charts. This frontend state is not a substitute
-for the Edge Function/database authorization checks and does not establish
-that the current production backend has the matching objects deployed.
+existing workflow. Suspended accounts cannot automatically reapply. The
+forward-only reinstatement candidate described below adds a restricted
+administrator transition; it does not change application-submission
+eligibility. Community Health Insights remain withheld unless the response
+explicitly reports `privacySuppressed: false` and a positive finite assessment
+total; withheld or malformed results never render charts. Frontend state is not
+a substitute for Edge Function/database authorization and does not establish
+that candidate database changes have been applied to a target environment.
+
+### Suspended NGO reinstatement (migration candidate)
+
+The forward-only candidate
+`20261107120000_admin_ngo_reinstatement.sql` adds a separate
+`reinstate_ngo_application` database RPC and the
+`admin-ngo-management` Edge Function's `reinstate` action. This workflow is
+restricted to an administrator whose persisted `user_roles` row is verified by
+the existing Edge Function and independently checked by the database RPC. The
+request must include a nonblank reason of at most 2,000 characters; the Edge
+Function derives the reviewer ID from the verified Auth token and ignores any
+reviewer identity supplied by a client.
+
+Only the applicant's latest application, ordered by `created_at DESC, id DESC`,
+may be reinstated, and only when its current status is `suspended`, the
+administrator is not the applicant, and the applicant's profile role is still
+`user`. The atomic transition records the administrator and decision time,
+sets the application to `approved`, clears its current `review_reason`, and
+restores `profiles.role` to `ngo`. The audit log retains the original
+suspension event and stores a distinct `ngo_application_reinstated` event with
+the reinstatement reason and suspended-to-approved status change. The original
+suspension reason remains in its suspension audit event; the reinstatement
+reason is not written over that event.
+
+After reinstatement, the NGO dashboard remains available only when the
+persisted profile role is `ngo` and the latest application is `approved`.
+Pending, rejected, older, inconsistent, or still-suspended applications do not
+restore access. Rejected applications may still use the existing resubmission
+workflow; suspended applications do not automatically reapply. This candidate
+has not been applied or deployed. Validate it and the associated pgTAP and
+concurrent-request tests in a fresh disposable PostgreSQL 17 Supabase-compatible
+fixture, and obtain target-side review and approval before any release action.
