@@ -1,8 +1,9 @@
 export const hasAdministratorRole = (role: unknown): boolean => role === "admin";
 
-export const availableReviewActions = (status: unknown): Array<"approved" | "rejected" | "suspended"> => {
+export const availableReviewActions = (status: unknown): Array<"approved" | "rejected" | "suspended" | "reinstate"> => {
   if (status === "pending") return ["approved", "rejected"];
   if (status === "approved") return ["suspended"];
+  if (status === "suspended") return ["reinstate"];
   return [];
 };
 

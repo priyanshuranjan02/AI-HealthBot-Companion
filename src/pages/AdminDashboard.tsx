@@ -43,6 +43,7 @@ const AdminDashboard = () => {
       const status = requestError.context instanceof Response ? requestError.context.status : undefined;
       if (status === 401) throw new Error("Your session expired. Sign in again to continue.");
       if (status === 403) throw new Error("Administrator access is required. Ask a trusted operator if you believe this is an error.");
+      if (status === 409) throw new Error("This application is no longer eligible for reinstatement. Refresh and review its current status.");
       throw requestError;
     }
     return result as Data | { success: true };
@@ -64,10 +65,14 @@ const AdminDashboard = () => {
 
   useEffect(() => { void load(); }, [load]);
 
-  const review = async (application: Application, status: "approved" | "rejected" | "suspended") => {
+  const review = async (application: Application, status: "approved" | "rejected" | "suspended" | "reinstate") => {
     const value = reason[application.id]?.trim() ?? "";
     if ((status === "rejected" || status === "suspended") && !value) {
       setError("A reason is required for rejection or suspension.");
+      return;
+    }
+    if (status === "reinstate" && !value) {
+      setError("A reinstatement reason is required.");
       return;
     }
     if (value.length > 2000) {
@@ -78,8 +83,13 @@ const AdminDashboard = () => {
     setError("");
     setBusyId(application.id);
     try {
-      await request({ action: "review", applicationId: application.id, status, reason: value });
+      if (status === "reinstate") {
+        await request({ action: "reinstate", applicationId: application.id, reason: value });
+      } else {
+        await request({ action: "review", applicationId: application.id, status, reason: value });
+      }
       await load();
+      if (status === "reinstate") setReason((current) => ({ ...current, [application.id]: "" }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Review failed. No status change was confirmed.");
     } finally {
@@ -136,6 +146,7 @@ const AdminDashboard = () => {
           {(data?.applications ?? []).map((item) => {
             const actions = availableReviewActions(item.status);
             const pending = actions.includes("approved");
+            const reinstatement = actions.includes("reinstate");
             return <article key={item.id} className="rounded-2xl border border-border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -150,8 +161,8 @@ const AdminDashboard = () => {
                 <Building2 className="h-6 w-6 text-primary" />
               </div>
               {actions.length > 0 && <div className="mt-4 space-y-3">
-                <label className="block text-sm font-medium">{pending ? "Review reason (required for rejection)" : "Suspension reason (required)"}
-                  <textarea value={reason[item.id] ?? ""} maxLength={2000} onChange={(event) => setReason({ ...reason, [item.id]: event.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Enter the reason for this decision" />
+                <label className="block text-sm font-medium">{pending ? "Review reason (required for rejection)" : reinstatement ? "Reinstatement reason (required)" : "Suspension reason (required)"}
+                  <textarea aria-label={reinstatement ? "Reinstatement reason" : pending ? "Review reason" : "Suspension reason"} required={reinstatement} value={reason[item.id] ?? ""} maxLength={2000} onChange={(event) => setReason({ ...reason, [item.id]: event.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder={reinstatement ? "Explain why NGO access is being restored" : "Enter the reason for this decision"} />
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {actions.includes("approved") && <>
@@ -159,7 +170,8 @@ const AdminDashboard = () => {
                     <button disabled={busyId === item.id} onClick={() => void review(item, "rejected")} className="rounded-lg border border-critical px-3 py-2 text-sm text-critical disabled:opacity-50">Reject</button>
                   </>}
                   {actions.includes("suspended") && <button disabled={busyId === item.id} onClick={() => void review(item, "suspended")} className="rounded-lg border border-critical px-3 py-2 text-sm text-critical disabled:opacity-50">Suspend NGO access</button>}
-                  {busyId === item.id && <Loader2 className="h-5 w-5 animate-spin text-primary" aria-label="Saving review" />}
+                  {reinstatement && <button disabled={busyId === item.id} onClick={() => void review(item, "reinstate")} className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">Reinstate NGO access</button>}
+                  {busyId === item.id && <Loader2 className="h-5 w-5 animate-spin text-primary" aria-label={reinstatement ? "Saving reinstatement" : "Saving review"} />}
                 </div>
               </div>}
             </article>;

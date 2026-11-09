@@ -4,6 +4,36 @@ BEGIN;
 
 SELECT no_plan();
 
+-- Preserve the identities and reference state of already-anonymized
+-- submission events (including prior disposable concurrency fixtures). The
+-- applicant-deletion assertion below must never count these unrelated rows.
+CREATE TEMP TABLE reviewer_preexisting_anonymized_ngo_audit AS
+SELECT id, action, actor_id, application_id, target_user_id, details, anonymized_at
+FROM public.admin_audit_log
+WHERE action IN (
+    'ngo_application_submitted',
+    'ngo_application_approved',
+    'ngo_application_rejected',
+    'ngo_application_suspended',
+    'ngo_application_reinstated'
+  )
+  AND anonymized_at IS NOT NULL;
+
+SELECT diag(
+  'AIHB_REVIEWER_PREEXISTING_ANON_NGO_AUDIT_BEFORE ' || COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'audit_id', id,
+      'action', action,
+      'actor_id', actor_id,
+      'application_id', application_id,
+      'target_user_id', target_user_id,
+      'details', details,
+      'anonymized_at', anonymized_at
+    ) ORDER BY id)::text
+    FROM reviewer_preexisting_anonymized_ngo_audit
+  ), '[]')
+);
+
 -- Assert the actual PostgreSQL RPC response, not only its source text. The
 -- current contract is fail-closed: these are fixed placeholders and contain
 -- no computed health-derived values. Keep this assertion aligned with the
@@ -695,6 +725,39 @@ WHERE app.id IN (
 )
   AND reviewer.label = 'reviewer';
 
+-- Retain stable synthetic row identities for the focused assertions below.
+-- Account deletion intentionally clears actor, target and application foreign
+-- keys, so these test-owned audit rows cannot be identified by those fields
+-- after the reviewer profile is deleted. Unrelated retained audit events from
+-- other suites remain outside this assertion.
+CREATE TEMP TABLE reviewer_account_review_audit_ids (
+  id uuid PRIMARY KEY,
+  action text NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO reviewer_account_review_audit_ids (id, action)
+SELECT id, action
+FROM public.admin_audit_log
+WHERE application_id IN (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'::uuid,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'::uuid
+);
+
+SELECT diag(
+  'AIHB_REVIEWER_TEST_AUDIT_ROWS ' || COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'audit_id', audit.id,
+      'action', audit.action,
+      'actor_id', audit.actor_id,
+      'application_id', audit.application_id,
+      'target_user_id', audit.target_user_id
+    ) ORDER BY audit.action)::text
+    FROM public.admin_audit_log AS audit
+    JOIN reviewer_account_review_audit_ids AS owned USING (id)
+  ), '[]')
+);
+
 DELETE FROM auth.users
 WHERE id = (SELECT id FROM healthbot_test_users WHERE label = 'reviewer');
 
@@ -755,14 +818,22 @@ SELECT is(
   'suspension reason remains unchanged'
 );
 SELECT is(
-  (SELECT count(*)::integer FROM public.admin_audit_log WHERE action LIKE 'ngo_application_%'),
+  (SELECT count(*)::integer
+   FROM public.admin_audit_log AS audit
+   JOIN reviewer_account_review_audit_ids AS owned USING (id)
+   WHERE audit.action LIKE 'ngo_application_%'),
   3,
-  'review audit events are retained'
+  'the three review audit events created by this test are retained'
 );
 SELECT ok(
-  (SELECT bool_and(actor_id IS NULL AND target_user_id IS NULL AND application_id IS NULL AND details = '{}'::jsonb AND anonymized_at IS NOT NULL)
-   FROM public.admin_audit_log WHERE action LIKE 'ngo_application_%'),
-  'review audit events are anonymized under the existing policy'
+  (SELECT count(*) = 3 AND bool_and(
+      audit.actor_id IS NULL AND audit.target_user_id IS NULL
+      AND audit.application_id IS NULL AND audit.details = '{}'::jsonb
+      AND audit.anonymized_at IS NOT NULL
+    )
+   FROM public.admin_audit_log AS audit
+   JOIN reviewer_account_review_audit_ids AS owned USING (id)),
+  'the three review audit events created by this test are anonymized under the existing policy'
 );
 
 INSERT INTO public.ngo_applications (
@@ -788,6 +859,49 @@ SELECT id, 'ngo_application_submitted', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'::
 FROM healthbot_test_users
 WHERE label = 'cascade-applicant';
 
+-- Capture this fixture's generated audit UUID while its original references
+-- are still present. Later assertions join by this UUID, never by a broad
+-- action/details predicate that can match retained events from other tests.
+CREATE TEMP TABLE reviewer_applicant_deletion_audit_fixture (
+  audit_id uuid PRIMARY KEY,
+  expected_actor_id uuid NOT NULL,
+  expected_application_id uuid NOT NULL,
+  expected_target_user_id uuid NOT NULL,
+  expected_action text NOT NULL,
+  expected_details jsonb NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO reviewer_applicant_deletion_audit_fixture (
+  audit_id, expected_actor_id, expected_application_id,
+  expected_target_user_id, expected_action, expected_details
+)
+SELECT audit.id, audit.actor_id, audit.application_id,
+       audit.target_user_id, audit.action, audit.details
+FROM public.admin_audit_log AS audit
+JOIN healthbot_test_users AS applicant ON applicant.id = audit.actor_id
+WHERE applicant.label = 'cascade-applicant'
+  AND audit.action = 'ngo_application_submitted'
+  AND audit.application_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'::uuid
+  AND audit.target_user_id = applicant.id
+  AND audit.details = '{"synthetic":true}'::jsonb;
+
+SELECT diag(
+  'AIHB_REVIEWER_APPLICANT_AUDIT_BEFORE_DELETE ' || COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'audit_id', audit.id,
+      'action', audit.action,
+      'actor_id', audit.actor_id,
+      'application_id', audit.application_id,
+      'target_user_id', audit.target_user_id,
+      'details', audit.details,
+      'anonymized_at', audit.anonymized_at
+    ) ORDER BY audit.id)::text
+    FROM public.admin_audit_log AS audit
+    JOIN reviewer_applicant_deletion_audit_fixture AS fixture
+      ON fixture.audit_id = audit.id
+  ), '[]')
+);
+
 INSERT INTO public.symptom_checks (user_id, symptoms, diagnosis, confidence, severity)
 SELECT id, ARRAY['synthetic symptom'], 'Synthetic diagnosis', 50, 'low'
 FROM healthbot_test_users
@@ -807,9 +921,74 @@ SELECT is(
   'applicant deletion cascades health assessments'
 );
 SELECT is(
-  (SELECT count(*)::integer FROM public.admin_audit_log WHERE action = 'ngo_application_submitted' AND anonymized_at IS NOT NULL AND details = '{}'::jsonb),
+  (SELECT count(*)::integer
+   FROM public.admin_audit_log AS audit
+   JOIN reviewer_applicant_deletion_audit_fixture AS fixture
+     ON fixture.audit_id = audit.id
+   WHERE fixture.expected_action = 'ngo_application_submitted'
+     AND fixture.expected_actor_id = (
+       SELECT id FROM healthbot_test_users WHERE label = 'cascade-applicant'
+     )
+     AND fixture.expected_application_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'::uuid
+     AND fixture.expected_target_user_id = fixture.expected_actor_id
+     AND fixture.expected_details = '{"synthetic":true}'::jsonb
+     AND audit.action = fixture.expected_action
+     AND audit.actor_id IS NULL
+     AND audit.application_id IS NULL
+     AND audit.target_user_id IS NULL
+     AND audit.details = '{}'::jsonb
+     AND audit.anonymized_at IS NOT NULL),
   1,
-  'applicant audit event is retained and anonymized'
+  'the applicant-deletion fixture audit UUID is retained and fully anonymized'
+);
+
+SELECT diag(
+  'AIHB_REVIEWER_APPLICANT_AUDIT_AFTER_DELETE ' || COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'audit_id', audit.id,
+      'action', audit.action,
+      'actor_id', audit.actor_id,
+      'application_id', audit.application_id,
+      'target_user_id', audit.target_user_id,
+      'details', audit.details,
+      'anonymized_at', audit.anonymized_at
+    ) ORDER BY audit.id)::text
+    FROM public.admin_audit_log AS audit
+    JOIN reviewer_applicant_deletion_audit_fixture AS fixture
+      ON fixture.audit_id = audit.id
+  ), '[]')
+);
+
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1
+    FROM reviewer_preexisting_anonymized_ngo_audit AS before_row
+    LEFT JOIN public.admin_audit_log AS after_row ON after_row.id = before_row.id
+    WHERE after_row.id IS NULL
+       OR ROW(after_row.action, after_row.actor_id, after_row.application_id,
+              after_row.target_user_id, after_row.details, after_row.anonymized_at)
+          IS DISTINCT FROM
+          ROW(before_row.action, before_row.actor_id, before_row.application_id,
+              before_row.target_user_id, before_row.details, before_row.anonymized_at)
+  ),
+  'preexisting anonymized NGO submission/review audit events remain present and unchanged'
+);
+
+SELECT diag(
+  'AIHB_REVIEWER_PREEXISTING_ANON_NGO_AUDIT_AFTER ' || COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'audit_id', audit.id,
+      'action', audit.action,
+      'actor_id', audit.actor_id,
+      'application_id', audit.application_id,
+      'target_user_id', audit.target_user_id,
+      'details', audit.details,
+      'anonymized_at', audit.anonymized_at
+    ) ORDER BY audit.id)::text
+    FROM public.admin_audit_log AS audit
+    JOIN reviewer_preexisting_anonymized_ngo_audit AS before_row
+      ON before_row.id = audit.id
+  ), '[]')
 );
 
 CREATE TABLE public.healthbot_test_delete_blocker (

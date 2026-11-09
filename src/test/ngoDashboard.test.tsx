@@ -144,7 +144,11 @@ describe("NGO organization dashboard", () => {
     expect(mocks.invoke.mock.calls.map(([name]) => name)).toEqual(["ngo-application"]);
     if (canSubmit) expect(screen.getByRole("link", { name: /application/i })).toBeInTheDocument();
     else expect(screen.queryByRole("link", { name: /application/i })).not.toBeInTheDocument();
-    if (state === "suspended") expect(screen.getByText(/reinstatement requires administrator action.*does not yet offer reinstatement/i)).toBeInTheDocument();
+    if (state === "suspended") {
+      expect(screen.getByText(/contact an administrator through support to request a review for reinstatement/i)).toBeInTheDocument();
+      expect(screen.getByText(/only an administrator can restore access; you cannot reinstate your own account/i)).toBeInTheDocument();
+      expect(screen.queryByText(/admin dashboard does not yet offer reinstatement/i)).not.toBeInTheDocument();
+    }
   });
 
   it("shows the application portal for an eligible account with no application", async () => {
