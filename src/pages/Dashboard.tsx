@@ -72,10 +72,10 @@ const parseOrganizationStatus = (value: unknown): OrganizationStatus | null => {
       registration_identifier: row.registration_identifier,
       official_contact_email: row.official_contact_email,
       official_contact_phone: row.official_contact_phone,
-      website: row.website as string | null,
+      website: row.website,
       status: row.status as ApplicationStatus,
-      review_reason: row.review_reason as string | null,
-      decided_at: row.decided_at as string | null,
+      review_reason: row.review_reason,
+      decided_at: row.decided_at,
       created_at: row.created_at,
     };
   }
