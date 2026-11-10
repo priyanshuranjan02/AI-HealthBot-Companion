@@ -8,6 +8,13 @@
       "when": 1793863313320,
       "tag": "0000_lovable_profile_role_insert_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794315916086,
+      "tag": "0001_admin_ngo_reinstatement",
+      "breakpoints": true
     }
   ]
 }
