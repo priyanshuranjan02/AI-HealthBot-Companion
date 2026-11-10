@@ -242,6 +242,14 @@ export type Database = {
     }
     Functions: {
       get_ngo_dashboard_stats: { Args: never; Returns: Json }
+      reinstate_ngo_application: {
+        Args: {
+          p_application_id: string
+          p_reason: string
+          p_reviewer_id: string
+        }
+        Returns: undefined
+      }
       review_ngo_application: {
         Args: {
           p_application_id: string
